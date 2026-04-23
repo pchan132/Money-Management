@@ -1,0 +1,338 @@
+'use server'
+
+import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
+import type { Category, Transaction, Prisma } from '@prisma/client'
+import { auth } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { getCurrentMonthRange, getLastNMonths, getMonthRange } from '@/lib/utils'
+import type {
+  ActionState,
+  CategoryExpense,
+  DashboardSummary,
+  MonthlyData,
+  TransactionFilters,
+  TransactionWithCategory,
+} from '@/types'
+
+// ─── Auth helper ─────────────────────────────────────────────────────────────
+
+async function getAuthUserId(): Promise<string | null> {
+  const session = await auth()
+  return session?.user?.id ?? null
+}
+
+// ─── Mapping helper ──────────────────────────────────────────────────────────
+// Converts Prisma model (Decimal + Date) to our plain TypeScript types.
+
+type PrismaTransactionWithCategory = Transaction & { categories: Category | null }
+
+function mapTransaction(t: PrismaTransactionWithCategory): TransactionWithCategory {
+  return {
+    id: t.id,
+    user_id: t.user_id,
+    type: t.type as 'income' | 'expense',
+    amount: Number(t.amount),
+    category_id: t.category_id,
+    note: t.note,
+    created_at: t.created_at.toISOString(),
+    categories: t.categories
+      ? {
+          id: t.categories.id,
+          name: t.categories.name,
+          icon: t.categories.icon,
+          color: t.categories.color,
+          created_at: t.categories.created_at.toISOString(),
+        }
+      : null,
+  }
+}
+
+// ─── Read ─────────────────────────────────────────────────────────────────────
+
+export async function getTransactions(
+  filters?: TransactionFilters
+): Promise<{ data: TransactionWithCategory[] | null; error: string | null }> {
+  const userId = await getAuthUserId()
+  if (!userId) return { data: null, error: 'Unauthorized' }
+
+  try {
+    const where: Prisma.TransactionWhereInput = {
+      user_id: userId,
+      ...(filters?.type && filters.type !== 'all' ? { type: filters.type } : {}),
+      ...(filters?.category_id ? { category_id: filters.category_id } : {}),
+      ...(filters?.startDate || filters?.endDate
+        ? {
+            created_at: {
+              ...(filters.startDate ? { gte: new Date(filters.startDate + 'T00:00:00') } : {}),
+              ...(filters.endDate ? { lte: new Date(filters.endDate + 'T23:59:59') } : {}),
+            },
+          }
+        : {}),
+    }
+
+    const rows = await prisma.transaction.findMany({
+      where,
+      include: { categories: true },
+      orderBy: { created_at: 'desc' },
+    })
+
+    return { data: rows.map(mapTransaction), error: null }
+  } catch (e) {
+    return { data: null, error: (e as Error).message }
+  }
+}
+
+export async function getTransactionById(
+  id: string
+): Promise<{ data: TransactionWithCategory | null; error: string | null }> {
+  const userId = await getAuthUserId()
+  if (!userId) return { data: null, error: 'Unauthorized' }
+
+  try {
+    const row = await prisma.transaction.findFirst({
+      where: { id, user_id: userId },
+      include: { categories: true },
+    })
+
+    return { data: row ? mapTransaction(row) : null, error: null }
+  } catch (e) {
+    return { data: null, error: (e as Error).message }
+  }
+}
+
+export async function getDashboardSummary(): Promise<{
+  data: DashboardSummary | null
+  error: string | null
+}> {
+  const userId = await getAuthUserId()
+  if (!userId) return { data: null, error: 'Unauthorized' }
+
+  const { startDate, endDate } = getCurrentMonthRange()
+  const monthStart = new Date(startDate + 'T00:00:00')
+  const monthEnd = new Date(endDate + 'T23:59:59')
+
+  try {
+    const [totalIncomeAgg, totalExpenseAgg, monthIncomeAgg, monthExpenseAgg] = await Promise.all([
+      prisma.transaction.aggregate({
+        where: { user_id: userId, type: 'income' },
+        _sum: { amount: true },
+      }),
+      prisma.transaction.aggregate({
+        where: { user_id: userId, type: 'expense' },
+        _sum: { amount: true },
+      }),
+      prisma.transaction.aggregate({
+        where: {
+          user_id: userId,
+          type: 'income',
+          created_at: { gte: monthStart, lte: monthEnd },
+        },
+        _sum: { amount: true },
+      }),
+      prisma.transaction.aggregate({
+        where: {
+          user_id: userId,
+          type: 'expense',
+          created_at: { gte: monthStart, lte: monthEnd },
+        },
+        _sum: { amount: true },
+      }),
+    ])
+
+    const totalIncome = Number(totalIncomeAgg._sum.amount ?? 0)
+    const totalExpense = Number(totalExpenseAgg._sum.amount ?? 0)
+    const monthlyIncome = Number(monthIncomeAgg._sum.amount ?? 0)
+    const monthlyExpense = Number(monthExpenseAgg._sum.amount ?? 0)
+
+    return {
+      data: {
+        totalIncome,
+        totalExpense,
+        balance: totalIncome - totalExpense,
+        monthlyIncome,
+        monthlyExpense,
+      },
+      error: null,
+    }
+  } catch (e) {
+    return { data: null, error: (e as Error).message }
+  }
+}
+
+export async function getMonthlyReport(): Promise<{
+  data: MonthlyData[] | null
+  error: string | null
+}> {
+  const userId = await getAuthUserId()
+  if (!userId) return { data: null, error: 'Unauthorized' }
+
+  const months = getLastNMonths(6)
+  const monthlyData: MonthlyData[] = []
+
+  try {
+    for (const { year, month, label } of months) {
+      const { startDate, endDate } = getMonthRange(year, month)
+      const gte = new Date(startDate + 'T00:00:00')
+      const lte = new Date(endDate + 'T23:59:59')
+
+      const [incomeAgg, expenseAgg] = await Promise.all([
+        prisma.transaction.aggregate({
+          where: { user_id: userId, type: 'income', created_at: { gte, lte } },
+          _sum: { amount: true },
+        }),
+        prisma.transaction.aggregate({
+          where: { user_id: userId, type: 'expense', created_at: { gte, lte } },
+          _sum: { amount: true },
+        }),
+      ])
+
+      monthlyData.push({
+        month: label,
+        income: Number(incomeAgg._sum.amount ?? 0),
+        expense: Number(expenseAgg._sum.amount ?? 0),
+      })
+    }
+
+    return { data: monthlyData, error: null }
+  } catch (e) {
+    return { data: null, error: (e as Error).message }
+  }
+}
+
+export async function getCategoryExpenses(
+  startDate: string,
+  endDate: string
+): Promise<{ data: CategoryExpense[] | null; error: string | null }> {
+  const userId = await getAuthUserId()
+  if (!userId) return { data: null, error: 'Unauthorized' }
+
+  try {
+    const rows = await prisma.transaction.findMany({
+      where: {
+        user_id: userId,
+        type: 'expense',
+        category_id: { not: null },
+        created_at: {
+          gte: new Date(startDate + 'T00:00:00'),
+          lte: new Date(endDate + 'T23:59:59'),
+        },
+      },
+      include: { categories: true },
+    })
+
+    const map = new Map<string, CategoryExpense>()
+
+    for (const t of rows) {
+      if (!t.categories) continue
+      const cat = t.categories
+      const amount = Number(t.amount)
+      const existing = map.get(cat.id)
+      if (existing) {
+        existing.total += amount
+      } else {
+        map.set(cat.id, { id: cat.id, name: cat.name, icon: cat.icon, color: cat.color, total: amount, percentage: 0 })
+      }
+    }
+
+    const categories = Array.from(map.values())
+    const grandTotal = categories.reduce((s, c) => s + c.total, 0)
+    categories.forEach((c) => {
+      c.percentage = grandTotal > 0 ? (c.total / grandTotal) * 100 : 0
+    })
+
+    return { data: categories.sort((a, b) => b.total - a.total), error: null }
+  } catch (e) {
+    return { data: null, error: (e as Error).message }
+  }
+}
+
+// ─── Mutations ───────────────────────────────────────────────────────────────
+
+export async function createTransaction(
+  _prevState: ActionState | null,
+  formData: FormData
+): Promise<ActionState | null> {
+  const userId = await getAuthUserId()
+  if (!userId) return { error: 'Unauthorized' }
+
+  const type = formData.get('type') as string
+  const amountRaw = formData.get('amount') as string
+  const category_id = (formData.get('category_id') as string) || null
+  const note = (formData.get('note') as string) || null
+  const dateRaw = formData.get('created_at') as string
+
+  if (type !== 'income' && type !== 'expense') return { error: 'Invalid type.' }
+
+  const amount = parseFloat(amountRaw)
+  if (isNaN(amount) || amount <= 0) return { error: 'Amount must be a positive number.' }
+
+  const created_at = dateRaw ? new Date(dateRaw) : new Date()
+
+  try {
+    await prisma.transaction.create({
+      data: { user_id: userId, type, amount, category_id, note, created_at },
+    })
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+
+  revalidatePath('/transactions')
+  revalidatePath('/dashboard')
+  redirect('/transactions')
+}
+
+export async function updateTransaction(
+  id: string,
+  _prevState: ActionState | null,
+  formData: FormData
+): Promise<ActionState | null> {
+  const userId = await getAuthUserId()
+  if (!userId) return { error: 'Unauthorized' }
+
+  const type = formData.get('type') as string
+  const amountRaw = formData.get('amount') as string
+  const category_id = (formData.get('category_id') as string) || null
+  const note = (formData.get('note') as string) || null
+  const dateRaw = formData.get('created_at') as string
+
+  if (type !== 'income' && type !== 'expense') return { error: 'Invalid type.' }
+
+  const amount = parseFloat(amountRaw)
+  if (isNaN(amount) || amount <= 0) return { error: 'Amount must be a positive number.' }
+
+  const created_at = dateRaw ? new Date(dateRaw) : undefined
+
+  try {
+    const result = await prisma.transaction.updateMany({
+      where: { id, user_id: userId }, // user_id prevents unauthorized updates
+      data: { type, amount, category_id, note, ...(created_at ? { created_at } : {}) },
+    })
+    if (result.count === 0) return { error: 'Transaction not found.' }
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+
+  revalidatePath('/transactions')
+  revalidatePath('/dashboard')
+  redirect('/transactions')
+}
+
+export async function deleteTransaction(
+  id: string
+): Promise<{ error?: string; success?: boolean }> {
+  const userId = await getAuthUserId()
+  if (!userId) return { error: 'Unauthorized' }
+
+  try {
+    await prisma.transaction.deleteMany({
+      where: { id, user_id: userId }, // user_id prevents unauthorized deletes
+    })
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+
+  revalidatePath('/transactions')
+  revalidatePath('/dashboard')
+  return { success: true }
+}
