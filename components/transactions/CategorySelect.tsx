@@ -218,7 +218,7 @@ export default function CategorySelect({ categories: initial, defaultValue }: Ca
               type="text"
               value={icon}
               onChange={(e) => setIcon(e.target.value)}
-              placeholder="ðŸ·ï¸"
+              placeholder="icon"
               maxLength={2}
               className="w-14 px-2 py-2 border border-gray-300 rounded-lg text-sm text-center bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
