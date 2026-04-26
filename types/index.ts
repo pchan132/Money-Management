@@ -1,4 +1,5 @@
 export type TransactionType = 'income' | 'expense'
+export type Currency = 'THB' | 'USD'
 
 export interface Category {
   id: string
@@ -13,6 +14,9 @@ export interface Transaction {
   user_id: string
   type: TransactionType
   amount: number
+  currency: Currency
+  exchange_rate: number | null
+  amount_thb: number
   category_id: string | null
   note: string | null
   created_at: string

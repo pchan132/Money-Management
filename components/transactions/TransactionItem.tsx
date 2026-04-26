@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { Pencil, Trash2 } from 'lucide-react'
-import { cn, formatCurrency, formatDate } from '@/lib/utils'
+import { cn, formatCurrency, formatDate, formatTHB } from '@/lib/utils'
 import { deleteTransaction } from '@/actions/transactions'
 import type { TransactionWithCategory } from '@/types'
 
@@ -19,6 +19,7 @@ export default function TransactionItem({
   const [isDeleting, setIsDeleting] = useState(false)
   const isIncome = transaction.type === 'income'
   const category = transaction.categories
+  const isUSD = transaction.currency === 'USD'
 
   async function handleDelete() {
     if (!confirm('Delete this transaction? This cannot be undone.')) return
@@ -28,12 +29,10 @@ export default function TransactionItem({
       alert(result.error)
       setIsDeleting(false)
     }
-    // On success, revalidatePath in the action refreshes the list automatically
   }
 
-  // Derive a display color from the category hex or fallback
   const bgHex = category?.color ?? (isIncome ? '#10b981' : '#ef4444')
-  const iconBg = bgHex + '20' // 12% opacity tint
+  const iconBg = bgHex + '20'
 
   return (
     <div
@@ -62,14 +61,21 @@ export default function TransactionItem({
       </div>
 
       {/* Amount */}
-      <span
-        className={cn(
-          'text-sm font-semibold shrink-0',
-          isIncome ? 'text-emerald-600' : 'text-red-500'
+      <div className="flex flex-col items-end shrink-0">
+        <span
+          className={cn(
+            'text-sm font-semibold',
+            isIncome ? 'text-emerald-600' : 'text-red-500'
+          )}
+        >
+          {isIncome ? '+' : '−'}{formatCurrency(transaction.amount, transaction.currency)}
+        </span>
+        {isUSD && (
+          <span className="text-xs text-gray-400 mt-0.5">
+            ≈ {formatTHB(transaction.amount_thb)}
+          </span>
         )}
-      >
-        {isIncome ? '+' : '−'}{formatCurrency(transaction.amount)}
-      </span>
+      </div>
 
       {/* Actions */}
       {showActions && (
