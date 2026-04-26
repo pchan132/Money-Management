@@ -43,3 +43,23 @@ export async function createCategory(
     return { data: null, error: (e as Error).message }
   }
 }
+
+export async function deleteCategory(
+  id: string
+): Promise<{ error: string | null }> {
+  if (!id) return { error: 'Category ID is required.' }
+
+  try {
+    // Unlink transactions before deleting (set category_id to null)
+    await prisma.transaction.updateMany({
+      where: { category_id: id },
+      data: { category_id: null },
+    })
+    await prisma.category.delete({ where: { id } })
+    revalidatePath('/transactions')
+    revalidatePath('/transactions/new')
+    return { error: null }
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+}
