@@ -231,7 +231,7 @@ export default function CategorySelect({ categories: initial, defaultValue }: Ca
               placeholder="Category name"
               className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
-          </div>
+          </div>  
 
           <div className="flex flex-wrap gap-2">
             {PRESET_COLORS.map((c) => (
@@ -254,7 +254,7 @@ export default function CategorySelect({ categories: initial, defaultValue }: Ca
               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-white"
               style={{ backgroundColor: color }}
             >
-              {icon || 'ðŸ·ï¸'} {name || 'Preview'}
+              {icon || ''} {name || 'Preview'}
             </span>
             <button
               type="button"
