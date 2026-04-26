@@ -8,9 +8,4 @@ dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 
 // DATABASE_URL  — pooler (PgBouncer) URL for runtime queries
 // DIRECT_URL    — direct Postgres URL used by db push / db pull / migrate
-export default defineConfig({
-  datasource: {
-    url: process.env.DATABASE_URL!,
-    directUrl: process.env.DIRECT_URL,
-  },
-});
+export default defineConfig({});
