@@ -82,13 +82,16 @@ model Category {
 // Transactions — user-scoped financial records
 // ──────────────────────────────────────────────────
 model Transaction {
-  id          String    @id @default(cuid())
-  user_id     String
-  type        String    // "income" | "expense"
-  amount      Decimal   @db.Decimal(14, 2)
-  category_id String?
-  note        String?
-  created_at  DateTime  @default(now())
+  id            String   @id @default(cuid())
+  user_id       String
+  type          String   // "income" | "expense"
+  amount        Decimal  @db.Decimal(14, 2)   // original amount in `currency`
+  currency      String   @default("THB")       // "THB" | "USD"
+  exchange_rate Decimal? @db.Decimal(10, 4)   // rate used: 1 USD = N THB (null when THB)
+  amount_thb    Decimal  @db.Decimal(14, 2) @default(0) // amount converted to base currency THB
+  category_id   String?
+  note          String?
+  created_at    DateTime @default(now())
 
   user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
   categories Category? @relation(fields: [category_id], references: [id])

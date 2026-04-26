@@ -1,16 +1,23 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { createTransaction, updateTransaction } from '@/actions/transactions'
 import CategorySelect from '@/components/transactions/CategorySelect'
-import type { Category, TransactionWithCategory } from '@/types'
-import { getTodayInputValue } from '@/lib/utils'
+import type { Category, Currency, TransactionWithCategory } from '@/types'
+import { getTodayInputValue, formatCurrency, formatTHB } from '@/lib/utils'
+
+const CURRENCIES: { value: Currency; label: string; flag: string }[] = [
+  { value: 'THB', label: 'THB – Thai Baht', flag: '🇹🇭' },
+  { value: 'USD', label: 'USD – US Dollar', flag: '🇺🇸' },
+]
+
+const DEFAULT_EXCHANGE_RATE = 35.5
 
 interface TransactionFormProps {
   categories: Category[]
-  transaction?: TransactionWithCategory // present when editing
+  transaction?: TransactionWithCategory
 }
 
 function SubmitButton({ isEdit }: { isEdit: boolean }) {
@@ -42,7 +49,44 @@ export default function TransactionForm({ categories, transaction }: Transaction
 
   const [state, formAction] = useActionState(action, null)
 
-  // Default date: existing transaction date or today
+  const [currency, setCurrency] = useState<Currency>(
+    (transaction?.currency as Currency) ?? 'THB'
+  )
+  const [amount, setAmount] = useState<string>(
+    transaction?.amount !== undefined ? String(transaction.amount) : ''
+  )
+  const [exchangeRate, setExchangeRate] = useState<string>(
+    transaction?.exchange_rate ? String(transaction.exchange_rate) : String(DEFAULT_EXCHANGE_RATE)
+  )
+  const [isFetchingRate, setIsFetchingRate] = useState(false)
+
+  const isUSD = currency === 'USD'
+  const amountNum = parseFloat(amount)
+  const rateNum = parseFloat(exchangeRate)
+  const convertedTHB =
+    isUSD && !isNaN(amountNum) && !isNaN(rateNum) && amountNum > 0 && rateNum > 0
+      ? amountNum * rateNum
+      : null
+
+  async function handleFetchRate() {
+    setIsFetchingRate(true)
+    try {
+      const res = await fetch(
+        'https://api.frankfurter.app/latest?from=USD&to=THB'
+      )
+      if (!res.ok) throw new Error('Network error')
+      const data = await res.json()
+      const rate: number = data?.rates?.THB
+      if (rate && rate > 0) {
+        setExchangeRate(rate.toFixed(4))
+      }
+    } catch {
+      // silently keep the current value if fetch fails
+    } finally {
+      setIsFetchingRate(false)
+    }
+  }
+
   const defaultDate = transaction
     ? new Date(transaction.created_at).toISOString().split('T')[0]
     : getTodayInputValue()
@@ -79,15 +123,28 @@ export default function TransactionForm({ categories, transaction }: Transaction
         </div>
       </div>
 
-      {/* Amount */}
+      {/* Currency + Amount row */}
       <div>
-        <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-1.5">
-          Amount
-        </label>
-        <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">
-            $
-          </span>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">Amount</label>
+        <div className="flex gap-2">
+          {/* Currency dropdown */}
+          <div className="relative">
+            <select
+              name="currency"
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value as Currency)}
+              className="h-full appearance-none pl-3 pr-8 py-2.5 border border-gray-300 rounded-xl text-sm font-medium bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent cursor-pointer"
+            >
+              {CURRENCIES.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.flag} {c.value}
+                </option>
+              ))}
+            </select>
+            <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">▾</span>
+          </div>
+
+          {/* Amount input */}
           <input
             id="amount"
             name="amount"
@@ -95,12 +152,74 @@ export default function TransactionForm({ categories, transaction }: Transaction
             step="0.01"
             min="0.01"
             required
-            defaultValue={transaction?.amount}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
             placeholder="0.00"
-            className="w-full pl-8 pr-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            className="flex-1 px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
           />
         </div>
       </div>
+
+      {/* Exchange rate — only shown when USD is selected */}
+      {isUSD && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <label
+              htmlFor="exchange_rate"
+              className="text-sm font-medium text-amber-900"
+            >
+              Exchange rate <span className="font-normal text-amber-700">(1 USD = ? THB)</span>
+            </label>
+            <button
+              type="button"
+              onClick={handleFetchRate}
+              disabled={isFetchingRate}
+              className="flex items-center gap-1.5 text-xs font-medium text-amber-700 hover:text-amber-900 disabled:opacity-50 transition-colors"
+            >
+              {isFetchingRate ? (
+                <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              )}
+              {isFetchingRate ? 'Fetching…' : 'Fetch live rate'}
+            </button>
+          </div>
+
+          <input
+            id="exchange_rate"
+            name="exchange_rate"
+            type="number"
+            step="0.0001"
+            min="0.0001"
+            required={isUSD}
+            value={exchangeRate}
+            onChange={(e) => setExchangeRate(e.target.value)}
+            placeholder="35.5000"
+            className="w-full px-3 py-2.5 border border-amber-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+          />
+
+          {/* Preview */}
+          {convertedTHB !== null && (
+            <div className="flex items-center gap-2 pt-0.5">
+              <span className="text-xs text-amber-700">≈</span>
+              <span className="text-sm font-semibold text-amber-900">
+                {formatTHB(convertedTHB)}
+              </span>
+              <span className="text-xs text-amber-600">THB (base amount stored)</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Hidden field — keeps exchange_rate out of form when THB */}
+      {!isUSD && (
+        <input type="hidden" name="exchange_rate" value="" />
+      )}
 
       {/* Category */}
       <div>

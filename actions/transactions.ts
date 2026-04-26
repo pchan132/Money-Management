@@ -9,6 +9,7 @@ import { getCurrentMonthRange, getLastNMonths, getMonthRange } from '@/lib/utils
 import type {
   ActionState,
   CategoryExpense,
+  Currency,
   DashboardSummary,
   MonthlyData,
   TransactionFilters,
@@ -33,6 +34,9 @@ function mapTransaction(t: PrismaTransactionWithCategory): TransactionWithCatego
     user_id: t.user_id,
     type: t.type as 'income' | 'expense',
     amount: Number(t.amount),
+    currency: (t.currency as Currency) ?? 'THB',
+    exchange_rate: t.exchange_rate !== null ? Number(t.exchange_rate) : null,
+    amount_thb: Number(t.amount_thb),
     category_id: t.category_id,
     note: t.note,
     created_at: t.created_at.toISOString(),
@@ -116,11 +120,11 @@ export async function getDashboardSummary(): Promise<{
     const [totalIncomeAgg, totalExpenseAgg, monthIncomeAgg, monthExpenseAgg] = await Promise.all([
       prisma.transaction.aggregate({
         where: { user_id: userId, type: 'income' },
-        _sum: { amount: true },
+        _sum: { amount_thb: true },
       }),
       prisma.transaction.aggregate({
         where: { user_id: userId, type: 'expense' },
-        _sum: { amount: true },
+        _sum: { amount_thb: true },
       }),
       prisma.transaction.aggregate({
         where: {
@@ -128,7 +132,7 @@ export async function getDashboardSummary(): Promise<{
           type: 'income',
           created_at: { gte: monthStart, lte: monthEnd },
         },
-        _sum: { amount: true },
+        _sum: { amount_thb: true },
       }),
       prisma.transaction.aggregate({
         where: {
@@ -136,14 +140,14 @@ export async function getDashboardSummary(): Promise<{
           type: 'expense',
           created_at: { gte: monthStart, lte: monthEnd },
         },
-        _sum: { amount: true },
+        _sum: { amount_thb: true },
       }),
     ])
 
-    const totalIncome = Number(totalIncomeAgg._sum.amount ?? 0)
-    const totalExpense = Number(totalExpenseAgg._sum.amount ?? 0)
-    const monthlyIncome = Number(monthIncomeAgg._sum.amount ?? 0)
-    const monthlyExpense = Number(monthExpenseAgg._sum.amount ?? 0)
+    const totalIncome = Number(totalIncomeAgg._sum.amount_thb ?? 0)
+    const totalExpense = Number(totalExpenseAgg._sum.amount_thb ?? 0)
+    const monthlyIncome = Number(monthIncomeAgg._sum.amount_thb ?? 0)
+    const monthlyExpense = Number(monthExpenseAgg._sum.amount_thb ?? 0)
 
     return {
       data: {
@@ -179,18 +183,18 @@ export async function getMonthlyReport(): Promise<{
       const [incomeAgg, expenseAgg] = await Promise.all([
         prisma.transaction.aggregate({
           where: { user_id: userId, type: 'income', created_at: { gte, lte } },
-          _sum: { amount: true },
+          _sum: { amount_thb: true },
         }),
         prisma.transaction.aggregate({
           where: { user_id: userId, type: 'expense', created_at: { gte, lte } },
-          _sum: { amount: true },
+          _sum: { amount_thb: true },
         }),
       ])
 
       monthlyData.push({
         month: label,
-        income: Number(incomeAgg._sum.amount ?? 0),
-        expense: Number(expenseAgg._sum.amount ?? 0),
+        income: Number(incomeAgg._sum.amount_thb ?? 0),
+        expense: Number(expenseAgg._sum.amount_thb ?? 0),
       })
     }
 
@@ -226,7 +230,7 @@ export async function getCategoryExpenses(
     for (const t of rows) {
       if (!t.categories) continue
       const cat = t.categories
-      const amount = Number(t.amount)
+      const amount = Number(t.amount_thb)
       const existing = map.get(cat.id)
       if (existing) {
         existing.total += amount
@@ -258,20 +262,45 @@ export async function createTransaction(
 
   const type = formData.get('type') as string
   const amountRaw = formData.get('amount') as string
+  const currency = (formData.get('currency') as string) || 'THB'
+  const exchangeRateRaw = formData.get('exchange_rate') as string
   const category_id = (formData.get('category_id') as string) || null
   const note = (formData.get('note') as string) || null
   const dateRaw = formData.get('created_at') as string
 
   if (type !== 'income' && type !== 'expense') return { error: 'Invalid type.' }
+  if (currency !== 'THB' && currency !== 'USD') return { error: 'Invalid currency.' }
 
   const amount = parseFloat(amountRaw)
   if (isNaN(amount) || amount <= 0) return { error: 'Amount must be a positive number.' }
+
+  let exchange_rate: number | null = null
+  let amount_thb: number
+
+  if (currency === 'USD') {
+    const rate = parseFloat(exchangeRateRaw)
+    if (isNaN(rate) || rate <= 0) return { error: 'Exchange rate must be a positive number.' }
+    exchange_rate = rate
+    amount_thb = amount * rate
+  } else {
+    amount_thb = amount
+  }
 
   const created_at = dateRaw ? new Date(dateRaw) : new Date()
 
   try {
     await prisma.transaction.create({
-      data: { user_id: userId, type, amount, category_id, note, created_at },
+      data: {
+        user_id: userId,
+        type,
+        amount,
+        currency,
+        exchange_rate,
+        amount_thb,
+        category_id,
+        note,
+        created_at,
+      },
     })
   } catch (e) {
     return { error: (e as Error).message }
@@ -292,21 +321,45 @@ export async function updateTransaction(
 
   const type = formData.get('type') as string
   const amountRaw = formData.get('amount') as string
+  const currency = (formData.get('currency') as string) || 'THB'
+  const exchangeRateRaw = formData.get('exchange_rate') as string
   const category_id = (formData.get('category_id') as string) || null
   const note = (formData.get('note') as string) || null
   const dateRaw = formData.get('created_at') as string
 
   if (type !== 'income' && type !== 'expense') return { error: 'Invalid type.' }
+  if (currency !== 'THB' && currency !== 'USD') return { error: 'Invalid currency.' }
 
   const amount = parseFloat(amountRaw)
   if (isNaN(amount) || amount <= 0) return { error: 'Amount must be a positive number.' }
+
+  let exchange_rate: number | null = null
+  let amount_thb: number
+
+  if (currency === 'USD') {
+    const rate = parseFloat(exchangeRateRaw)
+    if (isNaN(rate) || rate <= 0) return { error: 'Exchange rate must be a positive number.' }
+    exchange_rate = rate
+    amount_thb = amount * rate
+  } else {
+    amount_thb = amount
+  }
 
   const created_at = dateRaw ? new Date(dateRaw) : undefined
 
   try {
     const result = await prisma.transaction.updateMany({
-      where: { id, user_id: userId }, // user_id prevents unauthorized updates
-      data: { type, amount, category_id, note, ...(created_at ? { created_at } : {}) },
+      where: { id, user_id: userId },
+      data: {
+        type,
+        amount,
+        currency,
+        exchange_rate,
+        amount_thb,
+        category_id,
+        note,
+        ...(created_at ? { created_at } : {}),
+      },
     })
     if (result.count === 0) return { error: 'Transaction not found.' }
   } catch (e) {
