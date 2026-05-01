@@ -1,21 +1,22 @@
 -- ============================================================
 -- Money Manager — Seed data
--- Run AFTER schema.sql
+-- NOTE: Categories are now user-scoped. Seed data must be
+-- inserted per-user. Replace <user_uuid> with an actual user ID.
 -- ============================================================
 
-INSERT INTO public.categories (name, icon, color) VALUES
-  ('Food & Dining',    '🍔', '#f97316'),
-  ('Transportation',   '🚗', '#3b82f6'),
-  ('Housing',          '🏠', '#8b5cf6'),
-  ('Healthcare',       '💊', '#ef4444'),
-  ('Entertainment',    '🎮', '#ec4899'),
-  ('Shopping',         '🛒', '#f59e0b'),
-  ('Education',        '📚', '#14b8a6'),
-  ('Travel',           '✈️', '#06b6d4'),
-  ('Salary',           '💼', '#10b981'),
-  ('Investment',       '📈', '#6366f1'),
-  ('Bills & Utilities','💡', '#78716c'),
-  ('Gifts',            '🎁', '#a855f7'),
-  ('Subscriptions',    '📱', '#64748b'),
-  ('Other',            '📦', '#9ca3af')
-ON CONFLICT DO NOTHING;
+-- Example (run once per user after they sign up):
+-- INSERT INTO public.categories (user_id, name, icon, color) VALUES
+--   ('<user_uuid>', 'Food & Dining',    '🍔', '#f97316'),
+--   ('<user_uuid>', 'Transportation',   '🚗', '#3b82f6'),
+--   ('<user_uuid>', 'Housing',          '🏠', '#8b5cf6'),
+--   ('<user_uuid>', 'Healthcare',       '💊', '#ef4444'),
+--   ('<user_uuid>', 'Entertainment',    '🎮', '#ec4899'),
+--   ('<user_uuid>', 'Shopping',         '🛒', '#f59e0b'),
+--   ('<user_uuid>', 'Education',        '📚', '#14b8a6'),
+--   ('<user_uuid>', 'Travel',           '✈️', '#06b6d4'),
+--   ('<user_uuid>', 'Salary',           '💼', '#10b981'),
+--   ('<user_uuid>', 'Investment',       '📈', '#6366f1'),
+--   ('<user_uuid>', 'Bills & Utilities','💡', '#78716c'),
+--   ('<user_uuid>', 'Gifts',            '🎁', '#a855f7'),
+--   ('<user_uuid>', 'Subscriptions',    '📱', '#64748b'),
+--   ('<user_uuid>', 'Other',            '📦', '#9ca3af');

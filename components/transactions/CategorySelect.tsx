@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useTransition, useRef } from 'react'
-import { Plus, X, Check, Loader2, Trash2, ChevronDown } from 'lucide-react'
-import { createCategory, deleteCategory } from '@/actions/categories'
+import { Plus, X, Check, Loader2, Trash2, ChevronDown, Pencil } from 'lucide-react'
+import { createCategory, updateCategory, deleteCategory } from '@/actions/categories'
 import type { Category } from '@/types'
 
 const PRESET_COLORS = [
@@ -33,8 +33,13 @@ export default function CategorySelect({ categories: initial, defaultValue }: Ca
   const [color, setColor] = useState(PRESET_COLORS[0])
   const [error, setError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editIcon, setEditIcon] = useState('')
+  const [editColor, setEditColor] = useState(PRESET_COLORS[0])
   const [isPending, startTransition] = useTransition()
   const nameRef = useRef<HTMLInputElement>(null)
+  const editNameRef = useRef<HTMLInputElement>(null)
 
   const selectedCategory = categories.find((c) => c.id === selectedId)
 
@@ -70,6 +75,40 @@ export default function CategorySelect({ categories: initial, defaultValue }: Ca
       )
       setSelectedId(newCat.id)
       setIsAdding(false)
+      setError(null)
+    })
+  }
+
+  function openEditForm(c: Category) {
+    setEditingId(c.id)
+    setEditName(c.name)
+    setEditIcon(c.icon)
+    setEditColor(c.color)
+    setError(null)
+    setTimeout(() => editNameRef.current?.focus(), 50)
+  }
+
+  function closeEditForm() {
+    setEditingId(null)
+    setError(null)
+  }
+
+  function handleUpdate(id: string) {
+    if (!editName.trim()) {
+      setError('Please enter a category name.')
+      return
+    }
+    startTransition(async () => {
+      const result = await updateCategory(id, editName, editIcon, editColor)
+      if (result.error || !result.data) {
+        setError(result.error ?? 'Failed to update category.')
+        return
+      }
+      const updated = result.data
+      setCategories((prev) =>
+        prev.map((c) => (c.id === id ? updated : c)).sort((a, b) => a.name.localeCompare(b.name))
+      )
+      setEditingId(null)
       setError(null)
     })
   }
@@ -134,33 +173,112 @@ export default function CategorySelect({ categories: initial, defaultValue }: Ca
             {/* Category rows */}
             <ul className="max-h-52 overflow-y-auto">
               {categories.map((c) => (
-                <li key={c.id} className="flex items-center group">
-                  <button
-                    type="button"
-                    onClick={() => { setSelectedId(c.id); setIsManaging(false) }}
-                    className={`flex-1 flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-gray-50 transition-colors ${selectedId === c.id ? 'bg-indigo-50' : ''}`}
-                  >
-                    <span
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-white shrink-0"
-                      style={{ backgroundColor: c.color }}
-                    >
-                      {c.icon} {c.name}
-                    </span>
-                    {selectedId === c.id && <Check className="h-3.5 w-3.5 text-indigo-600 ml-auto" />}
-                  </button>
-                  {/* Delete button */}
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(c.id)}
-                    disabled={deletingId === c.id}
-                    title={`Delete "${c.name}"`}
-                    className="px-2.5 py-2.5 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 disabled:opacity-50 transition-all"
-                  >
-                    {deletingId === c.id
-                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      : <Trash2 className="h-3.5 w-3.5" />
-                    }
-                  </button>
+                <li key={c.id}>
+                  {editingId === c.id ? (
+                    /* ── Inline edit form ── */
+                    <div className="px-3 py-2.5 space-y-2 bg-indigo-50/60 border-b border-indigo-100">
+                      {error && (
+                        <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1">{error}</p>
+                      )}
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={editIcon}
+                          onChange={(e) => setEditIcon(e.target.value)}
+                          placeholder="icon"
+                          maxLength={2}
+                          className="w-12 px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-center bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                        <input
+                          ref={editNameRef}
+                          type="text"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleUpdate(c.id))}
+                          placeholder="Category name"
+                          className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {PRESET_COLORS.map((col) => (
+                          <button
+                            key={col}
+                            type="button"
+                            onClick={() => setEditColor(col)}
+                            style={{ backgroundColor: col }}
+                            className="w-5 h-5 rounded-full transition-transform hover:scale-110 focus:outline-none"
+                          >
+                            {editColor === col && <Check className="h-3 w-3 text-white mx-auto" strokeWidth={3} />}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex items-center justify-between pt-0.5">
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-white"
+                          style={{ backgroundColor: editColor }}
+                        >
+                          {editIcon || ''} {editName || 'Preview'}
+                        </span>
+                        <div className="flex gap-1.5">
+                          <button
+                            type="button"
+                            onClick={closeEditForm}
+                            className="px-2.5 py-1 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdate(c.id)}
+                            disabled={isPending}
+                            className="flex items-center gap-1 px-2.5 py-1 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors"
+                          >
+                            {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* ── Normal row ── */
+                    <div className="flex items-center group">
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedId(c.id); setIsManaging(false) }}
+                        className={`flex-1 flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-gray-50 transition-colors ${selectedId === c.id ? 'bg-indigo-50' : ''}`}
+                      >
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-white shrink-0"
+                          style={{ backgroundColor: c.color }}
+                        >
+                          {c.icon} {c.name}
+                        </span>
+                        {selectedId === c.id && <Check className="h-3.5 w-3.5 text-indigo-600 ml-auto" />}
+                      </button>
+                      {/* Edit button */}
+                      <button
+                        type="button"
+                        onClick={() => openEditForm(c)}
+                        title={`Edit "${c.name}"`}
+                        className="px-2 py-2.5 text-gray-300 hover:text-indigo-500 opacity-0 group-hover:opacity-100 transition-all"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      {/* Delete button */}
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(c.id)}
+                        disabled={deletingId === c.id}
+                        title={`Delete "${c.name}"`}
+                        className="px-2 py-2.5 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 disabled:opacity-50 transition-all"
+                      >
+                        {deletingId === c.id
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : <Trash2 className="h-3.5 w-3.5" />
+                        }
+                      </button>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>

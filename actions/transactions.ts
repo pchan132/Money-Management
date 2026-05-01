@@ -43,6 +43,7 @@ function mapTransaction(t: PrismaTransactionWithCategory): TransactionWithCatego
     categories: t.categories
       ? {
           id: t.categories.id,
+          user_id: t.categories.user_id,
           name: t.categories.name,
           icon: t.categories.icon,
           color: t.categories.color,
