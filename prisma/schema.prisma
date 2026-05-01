@@ -19,6 +19,7 @@ model User {
   accounts      Account[]
   sessions      Session[]
   transactions  Transaction[]
+  categories    Category[]
   created_at    DateTime      @default(now())
 
   @@map("users")
@@ -65,16 +66,20 @@ model VerificationToken {
 }
 
 // ──────────────────────────────────────────────────
-// Categories — shared lookup table (no user scope)
+// Categories — user-scoped
 // ──────────────────────────────────────────────────
 model Category {
   id           String        @id @default(cuid())
+  user_id      String
   name         String
   icon         String        @default("")
   color        String        @default("#6366f1")
   created_at   DateTime      @default(now())
   transactions Transaction[]
 
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
   @@map("categories")
 }
 
