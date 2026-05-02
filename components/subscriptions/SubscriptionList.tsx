@@ -2,51 +2,85 @@
 
 import { useState } from 'react'
 import { PlusCircle, CreditCard } from 'lucide-react'
+import { format } from 'date-fns'
 import SubscriptionItem from '@/components/subscriptions/SubscriptionItem'
 import SubscriptionForm from '@/components/subscriptions/SubscriptionForm'
-import type { Category, SubscriptionWithCategory } from '@/types'
+import type { Category, SubscriptionWithPaidStatus } from '@/types'
 import { formatCurrency } from '@/lib/utils'
 
 interface SubscriptionListProps {
-  subscriptions: SubscriptionWithCategory[]
+  subscriptions: SubscriptionWithPaidStatus[]
   categories: Category[]
-  monthlyTotal: number
+  totalSubscriptions: number
+  paidSubscriptions: number
+  unpaidSubscriptions: number
 }
 
 export default function SubscriptionList({
   subscriptions,
   categories,
-  monthlyTotal,
+  totalSubscriptions,
+  paidSubscriptions,
+  unpaidSubscriptions,
 }: SubscriptionListProps) {
   const [showForm, setShowForm] = useState(false)
+  const currentMonth = format(new Date(), 'MMMM yyyy')
 
   const active = subscriptions.filter((s) => s.is_active)
   const paused = subscriptions.filter((s) => !s.is_active)
+  const paidCount = active.filter((s) => s.paidTransactionId !== null).length
+  const paidPct = totalSubscriptions > 0 ? (paidSubscriptions / totalSubscriptions) * 100 : 0
 
   return (
     <div className="space-y-6">
       {/* Summary banner */}
-      <div className="bg-gradient-to-r from-red-50 to-orange-50 border border-red-100 rounded-2xl p-5 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
-            <CreditCard className="h-5 w-5 text-red-500" />
+      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+              <CreditCard className="h-5 w-5 text-red-500" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-600">
+                Fixed monthly cost · {currentMonth}
+              </p>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalSubscriptions)}</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {active.length} active · {paidCount}/{active.length} paid this month
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-medium text-gray-600">Total fixed monthly cost</p>
-            <p className="text-2xl font-bold text-red-500">{formatCurrency(monthlyTotal)}</p>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {active.length} active subscription{active.length !== 1 ? 's' : ''}
-            </p>
-          </div>
+          <button
+            onClick={() => setShowForm((v) => !v)}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors shrink-0"
+          >
+            <PlusCircle className="h-4 w-4" />
+            <span className="hidden sm:inline">Add subscription</span>
+            <span className="sm:hidden">Add</span>
+          </button>
         </div>
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors shrink-0"
-        >
-          <PlusCircle className="h-4 w-4" />
-          <span className="hidden sm:inline">Add subscription</span>
-          <span className="sm:hidden">Add</span>
-        </button>
+
+        {/* Paid vs Unpaid progress bar */}
+        {active.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex justify-between text-xs">
+              <span className="flex items-center gap-1.5 text-emerald-700 font-medium">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                Paid: {formatCurrency(paidSubscriptions)}
+              </span>
+              <span className="flex items-center gap-1.5 text-orange-600 font-medium">
+                <span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />
+                Unpaid: {formatCurrency(unpaidSubscriptions)}
+              </span>
+            </div>
+            <div className="h-2 bg-orange-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                style={{ width: `${paidPct}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Add form */}

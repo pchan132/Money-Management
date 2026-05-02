@@ -19,6 +19,7 @@ export interface Transaction {
   exchange_rate: number | null
   amount_thb: number
   category_id: string | null
+  subscription_id: string | null
   note: string | null
   created_at: string
 }
@@ -52,6 +53,11 @@ export interface SubscriptionWithCategory extends Subscription {
   category: Category | null
 }
 
+export interface SubscriptionWithPaidStatus extends SubscriptionWithCategory {
+  /** transactionId of the payment recorded this month, or null if not yet paid */
+  paidTransactionId: string | null
+}
+
 export interface DashboardSummary {
   totalIncome: number
   totalExpense: number
@@ -60,7 +66,9 @@ export interface DashboardSummary {
   monthlyIncome: number
   monthlyExpense: number
   monthlyInvestment: number
-  monthlySubscriptions: number
+  totalSubscriptions: number
+  paidSubscriptions: number
+  unpaidSubscriptions: number
   actualAvailableBalance: number
 }
 

@@ -1,10 +1,11 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import type { Category, Subscription, Prisma } from '@prisma/client'
+import type { Category, Subscription } from '@prisma/client'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import type { ActionState, Currency, SubscriptionWithCategory } from '@/types'
+import { getCurrentMonthRange } from '@/lib/utils'
+import type { ActionState, Currency, SubscriptionWithCategory, SubscriptionWithPaidStatus } from '@/types'
 
 // ─── Auth helper ─────────────────────────────────────────────────────────────
 
@@ -203,6 +204,142 @@ export async function toggleSubscriptionActive(
 
     revalidatePath('/subscriptions')
     revalidatePath('/dashboard')
+    return { success: true }
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+}
+
+// ─── Get subscriptions with this-month paid status ────────────────────────────
+
+export async function getSubscriptionsWithPaidStatus(): Promise<{
+  data: {
+    subscriptions: SubscriptionWithPaidStatus[]
+    totalSubscriptions: number
+    paidSubscriptions: number
+    unpaidSubscriptions: number
+  } | null
+  error: string | null
+}> {
+  const userId = await getAuthUserId()
+  if (!userId) return { data: null, error: 'Unauthorized' }
+
+  const { startDate, endDate } = getCurrentMonthRange()
+  const monthStart = new Date(startDate + 'T00:00:00')
+  const monthEnd = new Date(endDate + 'T23:59:59')
+
+  try {
+    const [rows, paidTxs] = await Promise.all([
+      prisma.subscription.findMany({
+        where: { user_id: userId },
+        include: { category: true },
+        orderBy: { created_at: 'asc' },
+      }),
+      prisma.transaction.findMany({
+        where: {
+          user_id: userId,
+          subscription_id: { not: null },
+          created_at: { gte: monthStart, lte: monthEnd },
+        },
+        select: { id: true, subscription_id: true },
+      }),
+    ])
+
+    // subscriptionId → transactionId (first payment wins)
+    const paidMap = new Map<string, string>()
+    for (const tx of paidTxs) {
+      if (tx.subscription_id && !paidMap.has(tx.subscription_id)) {
+        paidMap.set(tx.subscription_id, tx.id)
+      }
+    }
+
+    const subscriptions: SubscriptionWithPaidStatus[] = rows.map((s) => ({
+      ...mapSubscription(s),
+      paidTransactionId: paidMap.get(s.id) ?? null,
+    }))
+
+    const active = subscriptions.filter((s) => s.is_active)
+    const totalSubscriptions = active.reduce((sum, s) => sum + s.amount_thb, 0)
+    const paidSubscriptions = active
+      .filter((s) => s.paidTransactionId !== null)
+      .reduce((sum, s) => sum + s.amount_thb, 0)
+    const unpaidSubscriptions = totalSubscriptions - paidSubscriptions
+
+    return {
+      data: { subscriptions, totalSubscriptions, paidSubscriptions, unpaidSubscriptions },
+      error: null,
+    }
+  } catch (e) {
+    return { data: null, error: (e as Error).message }
+  }
+}
+
+// ─── Mark subscription as paid (creates linked expense transaction) ───────────
+
+export async function markSubscriptionPaid(subscriptionId: string): Promise<ActionState> {
+  const userId = await getAuthUserId()
+  if (!userId) return { error: 'Unauthorized' }
+
+  try {
+    const subscription = await prisma.subscription.findFirst({
+      where: { id: subscriptionId, user_id: userId, is_active: true },
+    })
+    if (!subscription) return { error: 'Subscription not found' }
+
+    // Prevent duplicate payment in same month
+    const { startDate, endDate } = getCurrentMonthRange()
+    const existing = await prisma.transaction.findFirst({
+      where: {
+        user_id: userId,
+        subscription_id: subscriptionId,
+        created_at: {
+          gte: new Date(startDate + 'T00:00:00'),
+          lte: new Date(endDate + 'T23:59:59'),
+        },
+      },
+    })
+    if (existing) return { error: 'Already marked as paid this month' }
+
+    await prisma.transaction.create({
+      data: {
+        user_id: userId,
+        type: 'expense',
+        amount: subscription.amount,
+        currency: subscription.currency,
+        amount_thb: subscription.amount_thb,
+        category_id: subscription.category_id,
+        note: `Subscription: ${subscription.name}`,
+        subscription_id: subscriptionId,
+      },
+    })
+
+    revalidatePath('/subscriptions')
+    revalidatePath('/dashboard')
+    revalidatePath('/transactions')
+    return { success: true }
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+}
+
+// ─── Unmark (delete the linked payment transaction) ───────────────────────────
+
+export async function unmarkSubscriptionPaid(transactionId: string): Promise<ActionState> {
+  const userId = await getAuthUserId()
+  if (!userId) return { error: 'Unauthorized' }
+
+  try {
+    await prisma.transaction.deleteMany({
+      where: {
+        id: transactionId,
+        user_id: userId,
+        subscription_id: { not: null },
+      },
+    })
+
+    revalidatePath('/subscriptions')
+    revalidatePath('/dashboard')
+    revalidatePath('/transactions')
     return { success: true }
   } catch (e) {
     return { error: (e as Error).message }

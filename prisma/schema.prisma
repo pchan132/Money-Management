@@ -96,16 +96,19 @@ model Transaction {
   currency      String   @default("THB")       // "THB" | "USD"
   exchange_rate Decimal? @db.Decimal(10, 4)   // rate used: 1 USD = N THB (null when THB)
   amount_thb    Decimal  @db.Decimal(14, 2) @default(0) // amount converted to base currency THB
-  category_id   String?
-  note          String?
-  created_at    DateTime @default(now())
+  category_id     String?
+  note            String?
+  subscription_id String?   // link to Subscription if this tx is a subscription payment
+  created_at      DateTime  @default(now())
 
-  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  categories Category? @relation(fields: [category_id], references: [id])
+  user         User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  categories   Category?     @relation(fields: [category_id], references: [id])
+  subscription Subscription? @relation(fields: [subscription_id], references: [id], onDelete: SetNull)
 
   @@index([user_id])
   @@index([user_id, created_at(sort: Desc)])
   @@index([user_id, type])
+  @@index([subscription_id])
   @@map("transactions")
 }
 
@@ -125,8 +128,9 @@ model Subscription {
   note         String?
   created_at   DateTime @default(now())
 
-  user     User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  category Category? @relation(fields: [category_id], references: [id], onDelete: SetNull)
+  user         User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  category     Category?     @relation(fields: [category_id], references: [id], onDelete: SetNull)
+  transactions Transaction[]
 
   @@index([user_id])
   @@map("subscriptions")

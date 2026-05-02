@@ -23,7 +23,9 @@ export default async function DashboardPage() {
     monthlyIncome: 0,
     monthlyExpense: 0,
     monthlyInvestment: 0,
-    monthlySubscriptions: 0,
+    totalSubscriptions: 0,
+    paidSubscriptions: 0,
+    unpaidSubscriptions: 0,
     actualAvailableBalance: 0,
   }
 

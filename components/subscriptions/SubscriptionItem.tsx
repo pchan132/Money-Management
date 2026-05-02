@@ -1,20 +1,26 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Pencil, Trash2, ToggleLeft, ToggleRight, CalendarDays } from 'lucide-react'
-import { deleteSubscription, toggleSubscriptionActive } from '@/actions/subscriptions'
+import { Pencil, Trash2, ToggleLeft, ToggleRight, CalendarDays, CheckCircle2, Undo2 } from 'lucide-react'
+import {
+  deleteSubscription,
+  toggleSubscriptionActive,
+  markSubscriptionPaid,
+  unmarkSubscriptionPaid,
+} from '@/actions/subscriptions'
 import SubscriptionForm from '@/components/subscriptions/SubscriptionForm'
-import type { Category, SubscriptionWithCategory } from '@/types'
+import type { Category, SubscriptionWithPaidStatus } from '@/types'
 import { formatCurrency } from '@/lib/utils'
 
 interface SubscriptionItemProps {
-  subscription: SubscriptionWithCategory
+  subscription: SubscriptionWithPaidStatus
   categories: Category[]
 }
 
 export default function SubscriptionItem({ subscription, categories }: SubscriptionItemProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const isPaid = subscription.paidTransactionId !== null
 
   function handleToggle() {
     startTransition(async () => {
@@ -26,6 +32,19 @@ export default function SubscriptionItem({ subscription, categories }: Subscript
     if (!confirm(`Delete "${subscription.name}"?`)) return
     startTransition(async () => {
       await deleteSubscription(subscription.id)
+    })
+  }
+
+  function handleMarkPaid() {
+    startTransition(async () => {
+      await markSubscriptionPaid(subscription.id)
+    })
+  }
+
+  function handleUndo() {
+    if (!subscription.paidTransactionId) return
+    startTransition(async () => {
+      await unmarkSubscriptionPaid(subscription.paidTransactionId!)
     })
   }
 
@@ -63,11 +82,15 @@ export default function SubscriptionItem({ subscription, categories }: Subscript
 
   return (
     <div
-      className={`bg-white rounded-2xl border shadow-sm p-4 flex items-center gap-4 transition-opacity ${
-        !subscription.is_active ? 'opacity-50' : 'border-gray-100'
+      className={`bg-white rounded-2xl border shadow-sm p-4 flex items-center gap-4 transition-all ${
+        !subscription.is_active
+          ? 'opacity-50 border-gray-100'
+          : isPaid
+          ? 'border-emerald-200 bg-emerald-50/40'
+          : 'border-gray-100'
       }`}
     >
-      {/* Category color dot / icon */}
+      {/* Category color / icon */}
       <div
         className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-base"
         style={{
@@ -81,8 +104,14 @@ export default function SubscriptionItem({ subscription, categories }: Subscript
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <p className="text-sm font-semibold text-gray-900 truncate">{subscription.name}</p>
+          {isPaid && (
+            <span className="flex items-center gap-1 text-[10px] font-semibold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+              <CheckCircle2 className="h-3 w-3" />
+              Paid
+            </span>
+          )}
           {!subscription.is_active && (
             <span className="text-[10px] font-medium bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">
               Paused
@@ -90,7 +119,13 @@ export default function SubscriptionItem({ subscription, categories }: Subscript
           )}
         </div>
         <div className="flex items-center gap-3 mt-0.5">
-          <span className="text-sm font-bold text-red-500">{amountDisplay}</span>
+          <span
+            className={`text-sm font-bold ${
+              isPaid ? 'text-emerald-600 line-through decoration-emerald-400/60' : 'text-red-500'
+            }`}
+          >
+            {amountDisplay}
+          </span>
           <span className="text-xs text-gray-400 flex items-center gap-1">
             <CalendarDays className="h-3 w-3" />
             {ordinal(subscription.billing_date)} each month
@@ -106,10 +141,33 @@ export default function SubscriptionItem({ subscription, categories }: Subscript
 
       {/* Actions */}
       <div className="flex items-center gap-1 shrink-0">
+        {subscription.is_active &&
+          (isPaid ? (
+            <button
+              onClick={handleUndo}
+              disabled={isPending}
+              title="Undo payment"
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors disabled:opacity-40"
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+              Undo
+            </button>
+          ) : (
+            <button
+              onClick={handleMarkPaid}
+              disabled={isPending}
+              title="Mark as paid this month"
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-emerald-500 hover:bg-emerald-600 rounded-lg transition-colors disabled:opacity-40"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Pay
+            </button>
+          ))}
+
         <button
           onClick={handleToggle}
           disabled={isPending}
-          title={subscription.is_active ? 'Pause subscription' : 'Resume subscription'}
+          title={subscription.is_active ? 'Pause' : 'Resume'}
           className="p-2 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-40"
         >
           {subscription.is_active ? (

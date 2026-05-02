@@ -23,7 +23,7 @@ export default function SummaryCards({ summary }: SummaryCardsProps) {
     {
       title: 'Actual Available',
       value: formatCurrency(summary.actualAvailableBalance),
-      subtitle: `After ฿${summary.monthlySubscriptions.toLocaleString('th-TH', { minimumFractionDigits: 0 })} subscriptions`,
+      subtitle: `After ${formatCurrency(summary.unpaidSubscriptions)} unpaid subs`,
       Icon: ShieldCheck,
       iconBg: summary.actualAvailableBalance >= 0 ? 'bg-emerald-100' : 'bg-red-100',
       iconColor: summary.actualAvailableBalance >= 0 ? 'text-emerald-600' : 'text-red-500',
@@ -49,12 +49,12 @@ export default function SummaryCards({ summary }: SummaryCardsProps) {
     },
     {
       title: 'Subscriptions',
-      value: formatCurrency(summary.monthlySubscriptions),
-      subtitle: 'Fixed monthly cost',
+      value: formatCurrency(summary.unpaidSubscriptions),
+      subtitle: `${formatCurrency(summary.paidSubscriptions)} paid / ${formatCurrency(summary.totalSubscriptions)} total`,
       Icon: CreditCard,
       iconBg: 'bg-orange-100',
       iconColor: 'text-orange-500',
-      valueColor: 'text-orange-500',
+      valueColor: summary.unpaidSubscriptions > 0 ? 'text-orange-500' : 'text-emerald-600',
     },
     {
       title: 'ลงทุน',
@@ -77,7 +77,7 @@ export default function SummaryCards({ summary }: SummaryCardsProps) {
             {formatCurrency(summary.actualAvailableBalance)}
           </p>
           <p className="text-xs text-gray-400 mt-1">
-            Balance {formatCurrency(summary.balance)} − Subscriptions {formatCurrency(summary.monthlySubscriptions)}
+            Balance {formatCurrency(summary.balance)} − Unpaid subs {formatCurrency(summary.unpaidSubscriptions)}
           </p>
         </div>
         <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${summary.actualAvailableBalance >= 0 ? 'bg-emerald-100' : 'bg-red-100'}`}>

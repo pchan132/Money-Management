@@ -38,6 +38,7 @@ function mapTransaction(t: PrismaTransactionWithCategory): TransactionWithCatego
     exchange_rate: t.exchange_rate !== null ? Number(t.exchange_rate) : null,
     amount_thb: Number(t.amount_thb),
     category_id: t.category_id,
+    subscription_id: t.subscription_id,
     note: t.note,
     created_at: t.created_at.toISOString(),
     categories: t.categories
@@ -125,7 +126,8 @@ export async function getDashboardSummary(): Promise<{
       monthIncomeAgg,
       monthExpenseAgg,
       monthInvestmentAgg,
-      subscriptionAgg,
+      activeSubscriptions,
+      paidSubscriptionTxs,
     ] = await Promise.all([
       prisma.transaction.aggregate({
         where: { user_id: userId, type: 'income' },
@@ -163,9 +165,19 @@ export async function getDashboardSummary(): Promise<{
         },
         _sum: { amount_thb: true },
       }),
-      prisma.subscription.aggregate({
+      // All active subscriptions (master amounts)
+      prisma.subscription.findMany({
         where: { user_id: userId, is_active: true },
-        _sum: { amount_thb: true },
+        select: { id: true, amount_thb: true },
+      }),
+      // Transactions this month that are subscription payments
+      prisma.transaction.findMany({
+        where: {
+          user_id: userId,
+          subscription_id: { not: null },
+          created_at: { gte: monthStart, lte: monthEnd },
+        },
+        select: { subscription_id: true },
       }),
     ])
 
@@ -175,11 +187,21 @@ export async function getDashboardSummary(): Promise<{
     const monthlyIncome = Number(monthIncomeAgg._sum.amount_thb ?? 0)
     const monthlyExpense = Number(monthExpenseAgg._sum.amount_thb ?? 0)
     const monthlyInvestment = Number(monthInvestmentAgg._sum.amount_thb ?? 0)
-    const monthlySubscriptions = Number(subscriptionAgg._sum.amount_thb ?? 0)
+
+    // Subscription paid/unpaid calculation (no double-counting)
+    // Paid = subscriptions whose ID appears in a payment transaction this month
+    const paidIds = new Set(paidSubscriptionTxs.map((t) => t.subscription_id))
+    const totalSubscriptions = activeSubscriptions.reduce((s, r) => s + Number(r.amount_thb), 0)
+    const paidSubscriptions = activeSubscriptions
+      .filter((r) => paidIds.has(r.id))
+      .reduce((s, r) => s + Number(r.amount_thb), 0)
+    const unpaidSubscriptions = totalSubscriptions - paidSubscriptions
 
     const baseBalance = totalIncome - totalExpense
     const balance = baseBalance === 0 ? 0 : baseBalance - totalInvestment
-    const actualAvailableBalance = balance - monthlySubscriptions
+    // Actual available = balance already accounts for paid subscriptions (they are in expenses)
+    // We only subtract what's STILL UNPAID this month
+    const actualAvailableBalance = balance - unpaidSubscriptions
 
     return {
       data: {
@@ -190,7 +212,9 @@ export async function getDashboardSummary(): Promise<{
         monthlyIncome,
         monthlyExpense,
         monthlyInvestment,
-        monthlySubscriptions,
+        totalSubscriptions,
+        paidSubscriptions,
+        unpaidSubscriptions,
         actualAvailableBalance,
       },
       error: null,
