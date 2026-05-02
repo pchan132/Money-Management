@@ -20,6 +20,8 @@ interface SubscriptionItemProps {
 export default function SubscriptionItem({ subscription, categories }: SubscriptionItemProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [isPending, startTransition] = useTransition()
+  // isPaid reflects only THIS month — getSubscriptionsWithPaidStatus filters to current month,
+  // so this resets automatically each new month. The old expense stays in Transactions.
   const isPaid = subscription.paidTransactionId !== null
 
   function handleToggle() {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { PlusCircle, CreditCard } from 'lucide-react'
+import { PlusCircle, CreditCard, Info, ChevronDown } from 'lucide-react'
 import { format } from 'date-fns'
 import SubscriptionItem from '@/components/subscriptions/SubscriptionItem'
 import SubscriptionForm from '@/components/subscriptions/SubscriptionForm'
@@ -24,6 +24,7 @@ export default function SubscriptionList({
   unpaidSubscriptions,
 }: SubscriptionListProps) {
   const [showForm, setShowForm] = useState(false)
+  const [showGuide, setShowGuide] = useState(false)
   const currentMonth = format(new Date(), 'MMMM yyyy')
 
   const active = subscriptions.filter((s) => s.is_active)
@@ -78,6 +79,66 @@ export default function SubscriptionList({
                 className="h-full bg-emerald-500 rounded-full transition-all duration-500"
                 style={{ width: `${paidPct}%` }}
               />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* How it works */}
+      <div className="border border-blue-100 rounded-2xl overflow-hidden">
+        <button
+          onClick={() => setShowGuide((v) => !v)}
+          className="flex items-center justify-between w-full px-4 py-3 bg-blue-50 hover:bg-blue-100 transition-colors text-left"
+        >
+          <span className="flex items-center gap-2 text-sm font-medium text-blue-700">
+            <Info className="h-4 w-4 shrink-0" />
+            วิธีการใช้งาน (How it works)
+          </span>
+          <ChevronDown
+            className={`h-4 w-4 text-blue-500 transition-transform duration-200 ${
+              showGuide ? 'rotate-180' : ''
+            }`}
+          />
+        </button>
+        {showGuide && (
+          <div className="px-4 py-4 bg-blue-50/50 space-y-3 text-xs text-gray-700">
+            <div className="space-y-2">
+              <p className="font-semibold text-gray-800">💳 Subscription คืออะไร?</p>
+              <p>
+                Subscription คือค่าใช้จ่ายรายเดือนที่เกิดซ้ำ เช่น Netflix, Spotify, ค่า
+                Gym — ระบบจะหักยอดเหล่านี้ออกจากยอดคงเหลือเป็น{' '}
+                <span className="font-medium text-orange-600">"ค่าที่ยังไม่ได้จ่าย (Unpaid)"</span>{' '}
+                เพื่อให้รู้ว่าเงินที่ใช้ได้จริงเหลือเท่าไร
+              </p>
+            </div>
+            <hr className="border-blue-100" />
+            <div className="space-y-1.5">
+              <p className="font-semibold text-gray-800">🟢 กดปุ่ม Pay</p>
+              <p>
+                เมื่อกด <span className="font-medium text-emerald-700">Pay</span> ระบบจะสร้าง
+                รายการ Expense ในเดือนนั้นทันที และยอด Unpaid จะลดลง —
+                แสดงว่าคุณจ่ายค่า Subscription นั้นแล้ว
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <p className="font-semibold text-gray-800">↩️ กดปุ่ม Undo</p>
+              <p>
+                สามารถกด <span className="font-medium text-emerald-700">Undo</span> ได้{' '}
+                <span className="font-medium text-red-600">เฉพาะในเดือนเดียวกัน</span>{' '}
+                กับที่กด Pay เท่านั้น — ระบบจะลบรายการ Expense นั้นออก
+              </p>
+              <p className="text-gray-500">
+                ถ้าพ้นเดือนไปแล้ว ปุ่ม Undo จะถูกล็อก (🔒) และ Expense
+                ของเดือนนั้นจะยังคงอยู่ใน Transaction ตามปกติ
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <p className="font-semibold text-gray-800">📊 Actual Available Balance</p>
+              <p>
+                ยอดนี้บน Dashboard = ยอดคงเหลือ (Balance) −{' '}
+                <span className="font-medium text-orange-600">ค่า Subscription ที่ยังไม่ได้จ่าย</span>{' '}
+                เพื่อให้รู้ว่าเงินที่ใช้ได้จริงมีเท่าไร
+              </p>
             </div>
           </div>
         )}

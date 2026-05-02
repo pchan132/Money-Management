@@ -245,7 +245,7 @@ export async function getSubscriptionsWithPaidStatus(): Promise<{
       }),
     ])
 
-    // subscriptionId → transactionId (first payment wins)
+    // subscriptionId → transactionId (first payment this month wins)
     const paidMap = new Map<string, string>()
     for (const tx of paidTxs) {
       if (tx.subscription_id && !paidMap.has(tx.subscription_id)) {
@@ -322,20 +322,35 @@ export async function markSubscriptionPaid(subscriptionId: string): Promise<Acti
   }
 }
 
-// ─── Unmark (delete the linked payment transaction) ───────────────────────────
+// ─── Unmark (delete the linked payment transaction — current month only) ────────
 
 export async function unmarkSubscriptionPaid(transactionId: string): Promise<ActionState> {
   const userId = await getAuthUserId()
   if (!userId) return { error: 'Unauthorized' }
 
   try {
-    await prisma.transaction.deleteMany({
+    const { startDate, endDate } = getCurrentMonthRange()
+    const monthStart = new Date(startDate + 'T00:00:00')
+    const monthEnd = new Date(endDate + 'T23:59:59')
+
+    // Only allow undo if the payment was recorded THIS month
+    const tx = await prisma.transaction.findFirst({
       where: {
         id: transactionId,
         user_id: userId,
         subscription_id: { not: null },
+        created_at: { gte: monthStart, lte: monthEnd },
       },
     })
+
+    if (!tx) {
+      return {
+        error:
+          'Cannot undo — this payment was recorded in a previous month and is already counted in that month\'s expenses.',
+      }
+    }
+
+    await prisma.transaction.delete({ where: { id: transactionId } })
 
     revalidatePath('/subscriptions')
     revalidatePath('/dashboard')

@@ -54,7 +54,8 @@ export interface SubscriptionWithCategory extends Subscription {
 }
 
 export interface SubscriptionWithPaidStatus extends SubscriptionWithCategory {
-  /** transactionId of the payment recorded this month, or null if not yet paid */
+  /** transactionId of the payment recorded THIS month, or null if not yet paid.
+   *  Resets automatically each month — getSubscriptionsWithPaidStatus filters to current month only. */
   paidTransactionId: string | null
 }
 
