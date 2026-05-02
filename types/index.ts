@@ -34,6 +34,24 @@ export interface TransactionFilters {
   endDate?: string
 }
 
+export interface Subscription {
+  id: string
+  user_id: string
+  name: string
+  amount: number
+  currency: Currency
+  amount_thb: number
+  billing_date: number
+  category_id: string | null
+  is_active: boolean
+  note: string | null
+  created_at: string
+}
+
+export interface SubscriptionWithCategory extends Subscription {
+  category: Category | null
+}
+
 export interface DashboardSummary {
   totalIncome: number
   totalExpense: number
@@ -42,6 +60,8 @@ export interface DashboardSummary {
   monthlyIncome: number
   monthlyExpense: number
   monthlyInvestment: number
+  monthlySubscriptions: number
+  actualAvailableBalance: number
 }
 
 export interface MonthlyData {
