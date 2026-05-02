@@ -32,7 +32,7 @@ function mapTransaction(t: PrismaTransactionWithCategory): TransactionWithCatego
   return {
     id: t.id,
     user_id: t.user_id,
-    type: t.type as 'income' | 'expense',
+    type: t.type as 'income' | 'expense' | 'investment',
     amount: Number(t.amount),
     currency: (t.currency as Currency) ?? 'THB',
     exchange_rate: t.exchange_rate !== null ? Number(t.exchange_rate) : null,
@@ -118,13 +118,24 @@ export async function getDashboardSummary(): Promise<{
   const monthEnd = new Date(endDate + 'T23:59:59')
 
   try {
-    const [totalIncomeAgg, totalExpenseAgg, monthIncomeAgg, monthExpenseAgg] = await Promise.all([
+    const [
+      totalIncomeAgg,
+      totalExpenseAgg,
+      totalInvestmentAgg,
+      monthIncomeAgg,
+      monthExpenseAgg,
+      monthInvestmentAgg,
+    ] = await Promise.all([
       prisma.transaction.aggregate({
         where: { user_id: userId, type: 'income' },
         _sum: { amount_thb: true },
       }),
       prisma.transaction.aggregate({
         where: { user_id: userId, type: 'expense' },
+        _sum: { amount_thb: true },
+      }),
+      prisma.transaction.aggregate({
+        where: { user_id: userId, type: 'investment' },
         _sum: { amount_thb: true },
       }),
       prisma.transaction.aggregate({
@@ -143,20 +154,35 @@ export async function getDashboardSummary(): Promise<{
         },
         _sum: { amount_thb: true },
       }),
+      prisma.transaction.aggregate({
+        where: {
+          user_id: userId,
+          type: 'investment',
+          created_at: { gte: monthStart, lte: monthEnd },
+        },
+        _sum: { amount_thb: true },
+      }),
     ])
 
     const totalIncome = Number(totalIncomeAgg._sum.amount_thb ?? 0)
     const totalExpense = Number(totalExpenseAgg._sum.amount_thb ?? 0)
+    const totalInvestment = Number(totalInvestmentAgg._sum.amount_thb ?? 0)
     const monthlyIncome = Number(monthIncomeAgg._sum.amount_thb ?? 0)
     const monthlyExpense = Number(monthExpenseAgg._sum.amount_thb ?? 0)
+    const monthlyInvestment = Number(monthInvestmentAgg._sum.amount_thb ?? 0)
+
+    const baseBalance = totalIncome - totalExpense
+    const balance = baseBalance === 0 ? 0 : baseBalance - totalInvestment
 
     return {
       data: {
         totalIncome,
         totalExpense,
-        balance: totalIncome - totalExpense,
+        totalInvestment,
+        balance,
         monthlyIncome,
         monthlyExpense,
+        monthlyInvestment,
       },
       error: null,
     }
@@ -181,7 +207,7 @@ export async function getMonthlyReport(): Promise<{
       const gte = new Date(startDate + 'T00:00:00')
       const lte = new Date(endDate + 'T23:59:59')
 
-      const [incomeAgg, expenseAgg] = await Promise.all([
+      const [incomeAgg, expenseAgg, investmentAgg] = await Promise.all([
         prisma.transaction.aggregate({
           where: { user_id: userId, type: 'income', created_at: { gte, lte } },
           _sum: { amount_thb: true },
@@ -190,12 +216,17 @@ export async function getMonthlyReport(): Promise<{
           where: { user_id: userId, type: 'expense', created_at: { gte, lte } },
           _sum: { amount_thb: true },
         }),
+        prisma.transaction.aggregate({
+          where: { user_id: userId, type: 'investment', created_at: { gte, lte } },
+          _sum: { amount_thb: true },
+        }),
       ])
 
       monthlyData.push({
         month: label,
         income: Number(incomeAgg._sum.amount_thb ?? 0),
         expense: Number(expenseAgg._sum.amount_thb ?? 0),
+        investment: Number(investmentAgg._sum.amount_thb ?? 0),
       })
     }
 
@@ -269,7 +300,7 @@ export async function createTransaction(
   const note = (formData.get('note') as string) || null
   const dateRaw = formData.get('created_at') as string
 
-  if (type !== 'income' && type !== 'expense') return { error: 'Invalid type.' }
+  if (type !== 'income' && type !== 'expense' && type !== 'investment') return { error: 'Invalid type.' }
   if (currency !== 'THB' && currency !== 'USD') return { error: 'Invalid currency.' }
 
   const amount = parseFloat(amountRaw)
@@ -328,7 +359,7 @@ export async function updateTransaction(
   const note = (formData.get('note') as string) || null
   const dateRaw = formData.get('created_at') as string
 
-  if (type !== 'income' && type !== 'expense') return { error: 'Invalid type.' }
+  if (type !== 'income' && type !== 'expense' && type !== 'investment') return { error: 'Invalid type.' }
   if (currency !== 'THB' && currency !== 'USD') return { error: 'Invalid currency.' }
 
   const amount = parseFloat(amountRaw)

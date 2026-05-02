@@ -18,6 +18,7 @@ export default function TransactionItem({
 }: TransactionItemProps) {
   const [isDeleting, setIsDeleting] = useState(false)
   const isIncome = transaction.type === 'income'
+  const isInvestment = transaction.type === 'investment'
   const category = transaction.categories
   const isUSD = transaction.currency === 'USD'
 
@@ -31,7 +32,7 @@ export default function TransactionItem({
     }
   }
 
-  const bgHex = category?.color ?? (isIncome ? '#10b981' : '#ef4444')
+  const bgHex = category?.color ?? (isIncome ? '#10b981' : isInvestment ? '#8b5cf6' : '#ef4444')
   const iconBg = bgHex + '20'
 
   return (
@@ -46,13 +47,13 @@ export default function TransactionItem({
         className="w-10 h-10 rounded-xl flex items-center justify-center text-base shrink-0"
         style={{ backgroundColor: iconBg }}
       >
-        {category?.icon ?? (isIncome ? '💰' : '💸')}
+        {category?.icon ?? (isIncome ? '💰' : isInvestment ? '📈' : '💸')}
       </div>
 
       {/* Details */}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-gray-900 truncate">
-          {category?.name ?? (isIncome ? 'Income' : 'Expense')}
+          {category?.name ?? (isIncome ? 'Income' : isInvestment ? 'ลงทุน' : 'Expense')}
         </p>
         {transaction.note && (
           <p className="text-xs text-gray-400 truncate mt-0.5">{transaction.note}</p>
@@ -65,10 +66,10 @@ export default function TransactionItem({
         <span
           className={cn(
             'text-sm font-semibold',
-            isIncome ? 'text-emerald-600' : 'text-red-500'
+            isIncome ? 'text-emerald-600' : isInvestment ? 'text-violet-600' : 'text-red-500'
           )}
         >
-          {isIncome ? '+' : '−'}{formatCurrency(transaction.amount, transaction.currency)}
+          {isIncome ? '+' : isInvestment ? '📈' : '−'}{formatCurrency(transaction.amount, transaction.currency)}
         </span>
         {isUSD && (
           <span className="text-xs text-gray-400 mt-0.5">

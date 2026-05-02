@@ -1,4 +1,4 @@
-export type TransactionType = 'income' | 'expense'
+export type TransactionType = 'income' | 'expense' | 'investment'
 export type Currency = 'THB' | 'USD'
 
 export interface Category {
@@ -37,15 +37,18 @@ export interface TransactionFilters {
 export interface DashboardSummary {
   totalIncome: number
   totalExpense: number
+  totalInvestment: number
   balance: number
   monthlyIncome: number
   monthlyExpense: number
+  monthlyInvestment: number
 }
 
 export interface MonthlyData {
   month: string
   income: number
   expense: number
+  investment: number
 }
 
 export interface CategoryExpense {

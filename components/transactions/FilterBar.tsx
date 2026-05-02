@@ -40,6 +40,7 @@ export default function FilterBar({ categories }: FilterBarProps) {
             <option value="all">All types</option>
             <option value="income">Income</option>
             <option value="expense">Expense</option>
+            <option value="investment">📈 ลงทุน</option>
           </select>
         </div>
 
