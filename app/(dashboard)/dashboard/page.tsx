@@ -18,9 +18,11 @@ export default async function DashboardPage() {
   const summary = summaryResult.data ?? {
     totalIncome: 0,
     totalExpense: 0,
+    totalInvestment: 0,
     balance: 0,
     monthlyIncome: 0,
     monthlyExpense: 0,
+    monthlyInvestment: 0,
   }
 
   const recentTransactions = (transactionsResult.data ?? []).slice(0, 8)
