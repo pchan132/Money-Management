@@ -19,6 +19,7 @@ export interface Transaction {
   exchange_rate: number | null
   amount_thb: number
   category_id: string | null
+  subscription_id: string | null
   note: string | null
   created_at: string
 }
@@ -34,6 +35,30 @@ export interface TransactionFilters {
   endDate?: string
 }
 
+export interface Subscription {
+  id: string
+  user_id: string
+  name: string
+  amount: number
+  currency: Currency
+  amount_thb: number
+  billing_date: number
+  category_id: string | null
+  is_active: boolean
+  note: string | null
+  created_at: string
+}
+
+export interface SubscriptionWithCategory extends Subscription {
+  category: Category | null
+}
+
+export interface SubscriptionWithPaidStatus extends SubscriptionWithCategory {
+  /** transactionId of the payment recorded THIS month, or null if not yet paid.
+   *  Resets automatically each month — getSubscriptionsWithPaidStatus filters to current month only. */
+  paidTransactionId: string | null
+}
+
 export interface DashboardSummary {
   totalIncome: number
   totalExpense: number
@@ -42,6 +67,10 @@ export interface DashboardSummary {
   monthlyIncome: number
   monthlyExpense: number
   monthlyInvestment: number
+  totalSubscriptions: number
+  paidSubscriptions: number
+  unpaidSubscriptions: number
+  actualAvailableBalance: number
 }
 
 export interface MonthlyData {
