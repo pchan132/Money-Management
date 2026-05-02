@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown, Wallet } from 'lucide-react'
+import { TrendingUp, TrendingDown, Wallet, LineChart } from 'lucide-react'
 import { format } from 'date-fns'
 import type { DashboardSummary } from '@/types'
 import { formatCurrency } from '@/lib/utils'
@@ -38,10 +38,19 @@ export default function SummaryCards({ summary }: SummaryCardsProps) {
       iconColor: 'text-red-500',
       valueColor: 'text-red-500',
     },
+    {
+      title: 'ลงทุน',
+      value: formatCurrency(summary.monthlyInvestment),
+      subtitle: currentMonth,
+      Icon: LineChart,
+      iconBg: 'bg-violet-100',
+      iconColor: 'text-violet-600',
+      valueColor: 'text-violet-600',
+    },
   ]
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
       {cards.map(({ title, value, subtitle, Icon, iconBg, iconColor, valueColor }) => (
         <div
           key={title}

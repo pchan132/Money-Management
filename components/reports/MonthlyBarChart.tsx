@@ -59,6 +59,7 @@ export default function MonthlyBarChart({ data }: MonthlyBarChartProps) {
         />
         <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={36} />
         <Bar dataKey="expense" name="Expense" fill="#f87171" radius={[4, 4, 0, 0]} maxBarSize={36} />
+        <Bar dataKey="investment" name="ลงทุน" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={36} />
       </BarChart>
     </ResponsiveContainer>
   )

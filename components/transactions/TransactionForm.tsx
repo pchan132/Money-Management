@@ -102,8 +102,8 @@ export default function TransactionForm({ categories, transaction }: Transaction
       {/* Type selector */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
-        <div className="grid grid-cols-2 gap-3">
-          {(['expense', 'income'] as const).map((t) => (
+        <div className="grid grid-cols-3 gap-3">
+          {(['expense', 'income', 'investment'] as const).map((t) => (
             <label
               key={t}
               className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50 transition-colors"
@@ -116,7 +116,7 @@ export default function TransactionForm({ categories, transaction }: Transaction
                 className="accent-indigo-600"
               />
               <span className="text-sm font-medium capitalize text-gray-700">
-                {t === 'income' ? '💰 Income' : '💸 Expense'}
+                {t === 'income' ? '💰 Income' : t === 'expense' ? '💸 Expense' : '📈 ลงทุน'}
               </span>
             </label>
           ))}
